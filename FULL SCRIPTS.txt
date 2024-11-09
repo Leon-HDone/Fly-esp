@@ -1,0 +1,156 @@
+
+local player = game:GetService("Players").LocalPlayer
+local mouse = player:GetMouse()
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+
+local flying = false
+local speed = 50
+local bodyVelocity
+local bodyGyro
+local moveDirection = Vector3.new(0, 0, 0)
+
+
+local espEnabled = false
+local espObjects = {}
+
+local rainbowActive = false
+local colors = {
+    Color3.fromRGB(0, 0, 255),   -- Blau
+    Color3.fromRGB(255, 255, 0), -- Gelb
+    Color3.fromRGB(255, 0, 0),   -- Rot
+    Color3.fromRGB(0, 255, 0),   -- Grün
+    Color3.fromRGB(255, 105, 180), -- Pink
+    Color3.fromRGB(128, 0, 128), -- Lila
+    Color3.fromRGB(139, 69, 19), -- Braun
+}
+
+
+local function startFlying()
+    if flying then return end
+    flying = true
+
+    -- Humanoid entfernen und BodyVelocity hinzufügen
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.PlatformStand = true
+
+    -- BodyVelocity hinzufügen, damit der Spieler fliegen kann
+    bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+    bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+    bodyVelocity.Parent = character:WaitForChild("HumanoidRootPart")
+
+    bodyGyro = Instance.new("BodyGyro")
+    bodyGyro.MaxTorque = Vector3.new(100000, 100000, 100000)
+    bodyGyro.CFrame = character:WaitForChild("HumanoidRootPart").CFrame
+    bodyGyro.Parent = character:WaitForChild("HumanoidRootPart")
+
+
+    RunService.RenderStepped:Connect(function(_, dt)
+        if flying then
+            moveDirection = Vector3.new(
+                (UserInputService:IsKeyDown(Enum.KeyCode.D) and 1 or 0) - (UserInputService:IsKeyDown(Enum.KeyCode.A) and 1 or 0),
+                (UserInputService:IsKeyDown(Enum.KeyCode.Space) and 1 or 0) - (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) and 1 or 0),
+                (UserInputService:IsKeyDown(Enum.KeyCode.W) and 1 or 0) - (UserInputService:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
+            )
+            bodyVelocity.Velocity = moveDirection * speed
+            bodyGyro.CFrame = CFrame.new(character:WaitForChild("HumanoidRootPart").Position, mouse.Hit.p)
+        end
+    end)
+end
+
+
+local function stopFlying()
+    if not flying then return end
+    flying = false
+    local character = player.Character or player.CharacterAdded:Wait()
+    local humanoid = character:WaitForChild("Humanoid")
+    humanoid.PlatformStand = false
+    if bodyVelocity then bodyVelocity:Destroy() end
+    if bodyGyro then bodyGyro:Destroy() end
+end
+
+
+local function toggleESP()
+    espEnabled = not espEnabled
+    if espEnabled then
+        -- ESP an
+        for _, otherPlayer in pairs(game:GetService("Players"):GetPlayers()) do
+            if otherPlayer.Character then
+                local nameTag = Instance.new("BillboardGui")
+                nameTag.Adornee = otherPlayer.Character:WaitForChild("Head")
+                nameTag.Size = UDim2.new(0, 100, 0, 50)
+                nameTag.StudsOffset = Vector3.new(0, 3, 0)
+                nameTag.Parent = otherPlayer.Character
+
+                local label = Instance.new("TextLabel")
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.Text = otherPlayer.Name
+                label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                label.BackgroundTransparency = 1
+                label.Parent = nameTag
+
+                table.insert(espObjects, nameTag)
+            end
+        end
+    else
+        -- ESP aus
+        for _, tag in pairs(espObjects) do
+            tag:Destroy()
+        end
+        espObjects = {}
+    end
+end
+
+
+local function toggleRainbow()
+    rainbowActive = not rainbowActive
+    local character = player.Character or player.CharacterAdded:Wait()
+
+
+    if rainbowActive then
+        local index = 1
+        RunService.RenderStepped:Connect(function()
+            if rainbowActive then
+                local currentColor = colors[index]
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                        part.Color = currentColor
+                    end
+                end
+                index = (index % #colors) + 1
+            end
+        end)
+    else
+
+        for _, part in pairs(character:GetChildren()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.Color = Color3.fromRGB(255, 255, 255) -- Standardfarbe (weiß)
+            end
+        end
+    end
+end
+
+
+local function kickPlayer()
+    player:Kick("Du wurdest aus dem Spiel gekickt.")
+end
+
+
+player.Chatted:Connect(function(message)
+    if message:lower() == "/fly" then
+        if flying then
+            stopFlying()
+        else
+            startFlying()
+        end
+    elseif message:lower() == "/esp" then
+        toggleESP()
+    elseif message:lower() == "/kick" then
+        kickPlayer()
+    elseif message:lower() == "/rainbow" then
+        toggleRainbow()
+    end
+end)
